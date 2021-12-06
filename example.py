@@ -1,7 +1,5 @@
 from BayesianNetworks import *
 
-
-
 BatteryState = readFactorTable(['battery'], [0.9, 0.1], [[1, 0]])
 FuelState = readFactorTable(['fuel'], [0.9, 0.1], [[1, 0]])
 GaugeBF = readFactorTable(['gauge', 'battery', 'fuel'], [0.8, 0.2, 0.2, 0.1, 0.2, 0.8, 0.8, 0.9],
@@ -12,11 +10,12 @@ print(GaugeBF)
 
 carNet = [BatteryState, FuelState, GaugeBF]  # carNet is a list of factors
 
-## Notice that different order of operations give the same answer
-## (rows/columns may be permuted)
+# Notice that different order of operations give the same answer
+# (rows/columns may be permuted)
 joinFactors(joinFactors(BatteryState, FuelState), GaugeBF)
 join_result = joinFactors(joinFactors(GaugeBF, FuelState), BatteryState)
 print("=============Join result of All CPTs==========")
+print(joinFactors(BatteryState, FuelState))
 print(join_result)
 
 margin_result = marginalizeFactor(joinFactors(GaugeBF, BatteryState), 'gauge')

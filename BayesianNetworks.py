@@ -99,7 +99,34 @@ def joinFactors(factor1, factor2):
     f2 = pd.DataFrame.copy(factor2)
 
     joinFactor = None
-    # TODO: start your code
+    # start your code
+    # 防止返回空表
+    if f1.empty or f2.empty:
+        tmp = f1 if f2.empty else f2
+        return tmp
+
+    # 判断是否有公共列
+    common_columms = list(set(f1.columns).intersection(f2.columns))
+    common_columms.remove('probs')
+    if common_columms:
+        joinFactor = pd.merge(f1, f2, on=common_columms)
+    else:  # 没有公共列则全排列
+        gap = len(f2.index)
+        for i in range(len(f1.index) - 1):
+            f2 = f2.append(f2)
+        new_index = []
+        index = 0
+        for _ in range(0, len(f2.index), gap):
+            for _ in range(gap):
+                new_index.append(index)
+            index += 1
+        f2.index = new_index
+        joinFactor = pd.merge(f1, f2, left_index=True, right_index=True)
+
+    joinFactor['probs'] = joinFactor['probs_x'] * joinFactor['probs_y']
+    joinFactor.__delitem__('probs_x')
+    joinFactor.__delitem__('probs_y')
+    joinFactor.index = range(len(joinFactor.index))
 
     # end of your code
 
@@ -119,8 +146,10 @@ def marginalizeFactor(factorTable, hiddenVar):
     if hiddenVar not in list(factor.columns):
         return factor
 
-    # TODO: start your code
-
+    #  start your code
+    factor.__delitem__(hiddenVar)
+    var_name = list(filter(lambda x: x != 'probs', factor.columns))
+    factor = factor.groupby(var_name, as_index=False).sum()
     # end of your code
 
     return factor
@@ -141,7 +170,18 @@ def marginalizeNetworkVariables(bayesNet, hiddenVar):
 
     marginalizeBayesNet = bayesNet.copy()
 
-    # TODO: start your code
+    # start your code
+    join_table = pd.DataFrame()
+    for i in range(len(marginalizeBayesNet) - 1, -1, -1):
+        # for hidden_item in hiddenVar:
+        #     if hidden_item in factor_table:
+        if list(set(hiddenVar).intersection(marginalizeBayesNet[i].columns)):
+            join_table = joinFactors(join_table, marginalizeBayesNet[i])
+            marginalizeBayesNet.pop(i)
+    for var in hiddenVar:
+        join_table = marginalizeFactor(join_table, var)
+    if not join_table.empty:
+        marginalizeBayesNet.append(join_table)
 
     # end of your code
 
@@ -162,8 +202,16 @@ def evidenceUpdateNet(bayesNet, evidenceVars, evidenceVals):
         evidenceVals = [evidenceVals]
 
     updatedBayesNet = bayesNet.copy()
-    # TODO: start your code
-
+    # start your code
+    for index in range(len(evidenceVals)):  # 遍历evidence中的column
+        for factor_idx in range(len(updatedBayesNet) - 1, -1, -1):  # 遍历表格list
+            if evidenceVars[index] in updatedBayesNet[factor_idx].columns:
+                # 留下对应evidence的行
+                updatedBayesNet[factor_idx] = updatedBayesNet[factor_idx][
+                    lambda df: df[evidenceVars[index]] == int(evidenceVals[index])]
+                updatedBayesNet[factor_idx].__delitem__(evidenceVars[index])
+                if len(updatedBayesNet[factor_idx].columns) == 1:
+                    updatedBayesNet.pop(factor_idx)
     # end of your code
 
     return updatedBayesNet
@@ -190,7 +238,23 @@ def inference(bayesNet, hiddenVar, evidenceVars, evidenceVals):
 
     inferenceNet = bayesNet.copy()
     factor = None
-    # TODO: start your code
+    # start your code
+    inferenceNet = marginalizeNetworkVariables(inferenceNet, hiddenVar)
+    inferenceNet = evidenceUpdateNet(inferenceNet, evidenceVars, evidenceVals)
+    factor_reduce = reduce(lambda x, y: joinFactors(x, y), inferenceNet)
+    factor = factor_reduce.copy()
+
+    # normalization
+    sum_val = factor['probs'].sum()
+    if abs(sum_val - 1) > 0.01:
+        factor['probs'] = factor['probs'] / sum_val
+
+    # fix printing
+    factor_size = len(factor)
+    for i, var_name in enumerate(evidenceVars):
+        factor.loc[:, var_name] = [evidenceVals[i] for _ in range(factor_size)]
+    all_name = list(filter(lambda x: x != 'probs', factor.columns))
+    factor = pd.DataFrame(factor, columns=['probs'] + all_name)
 
     # end of your code
 
